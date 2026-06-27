@@ -41,7 +41,7 @@ k8s-project/
 ---
 
 
-🚀 Deployment Steps
+## Deployment Steps
 1. Host Directory Provisioning
 Because this cluster utilizes local path persistent volumes for the database tier, the storage directory must be initialized manually with correct ownership on the targeted worker node (k8s-worker-node1):
 
@@ -77,3 +77,17 @@ curl -X POST http://<WORKER_NODE_IP>:30080/api/products \
 Fetching Data (GET)
 Bash
 curl http://<WORKER_NODE_IP>:30080/api/products
+
+## 🧠 Core Engineering Challenges & Solutions
+
+### 1. Hyper-V Dynamic RAM & MongoDB WiredTiger Panics (`exitCode:100`)
+* **The Problem:** MongoDB's storage engine (`WiredTiger`) automatically allocates 50% of host RAM minus 1GB for cache. Because the Ubuntu VMs used Hyper-V Dynamic RAM, memory ballooning caused the underlying kernel memory allocation requests to fail silently during boot initialization, resulting in immediate pod crashes with an ambiguous `exitCode:100`.
+* **The Engineering Solution:** Hardcoded explicit limits into the deployment manifest by invoking container runtime arguments: `args: ["--wiredTigerCacheSizeGB", "0.25"]`. This stabilizes memory consumption to a strict 256MB footprint, completely bypassing the dynamic ballooning trap.
+
+### 2. Kubernetes Storage Object Immutability & Lifecycle Deadlocks
+* **The Problem:** Upgrading the volume architecture from a legacy `HostPath` configuration to a structured local `StorageClass` threw severe validation errors from the API server because `PersistentVolumeSource` fields are immutable after creation. Deleting them created a finalizer deadlock, trapping the PVC in a permanent `Terminating` state.
+* **The Engineering Solution:** Executed a patch configuration directly against the cluster metadata schema to strip out object finalizers (`kubectl patch pvc mongo-pvc -p '{"metadata":{"finalizers":null}}' --type=merge`). This safely forced the removal of the deadlocked components and permitted a clean redeployment.
+
+### 3. Local Volume Affinity Constraints
+* **The Problem:** Distributed databases running on bare-metal will lose data tracking if they shift between host worker machines randomly upon node failure.
+* **The Engineering Solution:** Enforced strict `nodeAffinity` rules matching the exact hostname of the designated storage node (`k8s-worker-node1`) alongside a `volumeBindingMode: WaitForFirstConsumer` configuration. This forces the Kubernetes scheduler to intelligently keep the data container bound strictly to the node where the physical `/mnt/data` disk mount resides.
