@@ -37,3 +37,41 @@ k8s-project/
 └── k8s/
     ├── mongodb.yaml         # SC, Local PV, PVC, Deployment, and ClusterIP Service
     └── backend.yaml         # Replicated API deployment and NodePort routing
+
+
+🚀 Deployment Steps
+1. Host Directory Provisioning
+Because this cluster utilizes local path persistent volumes for the database tier, the storage directory must be initialized manually with correct ownership on the targeted worker node (k8s-worker-node1):
+
+Bash
+sudo mkdir -p /mnt/data
+sudo chmod -R 777 /mnt/data
+2. Deploying the Infrastructure manifests
+From the Master Node terminal, apply the Kubernetes manifests in sequence:
+
+Bash
+# Initialize storage and database tier
+kubectl apply -f k8s/mongodb.yaml
+
+# Initialize application replicas and external routing
+kubectl apply -f k8s/backend.yaml
+3. Verification
+Verify the pods have transitioned to the Running state:
+
+Bash
+kubectl get pods -o wide
+🧪 API Verification & Testing
+The application is exposed via a high-range port (30080) across all cluster nodes. Run the following validation scripts from your host terminal:
+
+Health Check Endpoint
+Bash
+curl http://<WORKER_NODE_IP>:30080/health
+# Response: "Backend is operational"
+Seeding Data (POST)
+Bash
+curl -X POST http://<WORKER_NODE_IP>:30080/api/products \
+     -H "Content-Type: application/json" \
+     -d '{"name": "Mechanical Keyboard", "price": 99}'
+Fetching Data (GET)
+Bash
+curl http://<WORKER_NODE_IP>:30080/api/products
