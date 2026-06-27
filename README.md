@@ -38,6 +38,8 @@ k8s-project/
     ├── mongodb.yaml         # SC, Local PV, PVC, Deployment, and ClusterIP Service
     └── backend.yaml         # Replicated API deployment and NodePort routing
 
+---
+
 
 🚀 Deployment Steps
 1. Host Directory Provisioning
